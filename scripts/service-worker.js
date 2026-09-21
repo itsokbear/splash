@@ -11,7 +11,8 @@ self.addEventListener('install', event => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE);
     try {
-      await cache.addAll([...URLS].map(url => new Request(url, { cache: 'reload' })));
+      // Revalidate named assets while reusing their bytes after a 304 response.
+      await cache.addAll([...URLS].map(url => new Request(url, { cache: 'no-cache' })));
     } catch (error) {
       await caches.delete(CACHE);
       throw error;

@@ -8,6 +8,13 @@ test.beforeEach(() => {
 test('PWA: install metadata, offline reload, progress, graphics and Worker hints', async ({ page, context }, testInfo) => {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
+  await page.addInitScript(() => {
+    const register = navigator.serviceWorker.register.bind(navigator.serviceWorker);
+    Object.defineProperty(navigator.serviceWorker, 'register', { value: (url: string | URL, options?: RegistrationOptions) => {
+      document.documentElement.dataset.pwaRegisteredAt = document.readyState;
+      return register(url, options);
+    } });
+  });
   await page.goto('./');
   const manifestUrl = await page.locator('link[rel="manifest"]').evaluate((link: HTMLLinkElement) => link.href);
   const response = await page.request.get(manifestUrl);
@@ -25,6 +32,7 @@ test('PWA: install metadata, offline reload, progress, graphics and Worker hints
     expect(`${bytes.readUInt32BE(16)}x${bytes.readUInt32BE(20)}`).toBe(icon.sizes);
   }
   await page.waitForFunction(() => navigator.serviceWorker.controller?.scriptURL.endsWith('/sw.js'));
+  await expect(page.locator('html')).toHaveAttribute('data-pwa-registered-at', 'complete');
   await page.getByRole('button', { name: 'Меню', exact: true }).click();
   await page.getByRole('button', { name: 'Установить игру', exact: true }).click();
   await expect(page.getByTestId('offline-status')).toContainText('Всё готово');

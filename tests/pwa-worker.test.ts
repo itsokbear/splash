@@ -45,7 +45,7 @@ describe('offline updates', () => {
     const sw = worker();
     await sw.dispatch('install');
     expect(sw.cache.addAll.mock.calls[0][0].map(request => [request.url, request.cache])).toEqual([
-      [`${scope}index.html`, 'reload'], [`${scope}assets/game.js`, 'reload'], [`${scope}assets/solver.js`, 'reload'],
+      [`${scope}index.html`, 'no-cache'], [`${scope}assets/game.js`, 'no-cache'], [`${scope}assets/solver.js`, 'no-cache'],
     ]);
     expect(sw.skipWaiting).not.toHaveBeenCalled();
     expect(sw.claim).not.toHaveBeenCalled();

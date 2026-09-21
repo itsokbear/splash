@@ -34,7 +34,7 @@ export function setupPwa(onChange: () => void) {
       }
     };
     navigator.serviceWorker.addEventListener('controllerchange', updateReady);
-    void navigator.serviceWorker.register(workerUrl, { scope: scope.href, updateViaCache: 'none' })
+    const register = () => { void navigator.serviceWorker.register(workerUrl, { scope: scope.href, updateViaCache: 'none' })
       .then(registration => {
         updateReady();
         const watch = () => {
@@ -48,7 +48,10 @@ export function setupPwa(onChange: () => void) {
         };
         registration.addEventListener('updatefound', watch);
         watch();
-      }).catch(() => { offline = 'unavailable'; onChange(); });
+      }).catch(() => { offline = 'unavailable'; onChange(); }); };
+    // Let the first screen load before precaching competes for the connection.
+    if (document.readyState === 'complete') register();
+    else window.addEventListener('load', register, { once: true });
   }
 
   return {
