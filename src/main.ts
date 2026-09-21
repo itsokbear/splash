@@ -9,6 +9,7 @@ import { isUnlocked, readProgress, recordWin, writeProgress, type StorageLike } 
 import { drawBoard, animateMove } from './ui/board';
 import { icon, miniFrog, referencePiece } from './ui/art';
 import { GameAudio } from './presentation/audio';
+import { setupPwa, installationHelp } from './app/pwa';
 
 const levels = data.levels as unknown as LevelDefinition[];
 for (const level of levels) {
@@ -28,7 +29,7 @@ let worker: Worker | null = null;
 let workerTimeout: ReturnType<typeof setTimeout> | undefined;
 let animations: Animation[] = [];
 let transitionId = 0;
-type Screen = 'menu' | 'levels' | 'win' | 'restart' | 'leave';
+type Screen = 'menu' | 'levels' | 'win' | 'restart' | 'leave' | 'install';
 let screen: Screen | null = null;
 let pendingLevel: LevelDefinition | null = null;
 let focusBeforeDialog: HTMLElement | null = null;
@@ -58,6 +59,12 @@ app.innerHTML = `
 const board = app.querySelector<HTMLDivElement>('.board')!;
 const dialog = app.querySelector<HTMLDialogElement>('dialog')!;
 const find = <T extends HTMLElement = HTMLElement>(selector: string) => app.querySelector<T>(selector)!;
+const pwa = setupPwa(() => {
+  if (screen !== 'install') return;
+  const focused = document.activeElement instanceof HTMLButtonElement ? document.activeElement.dataset.action : undefined;
+  drawScreen();
+  if (focused) (dialog.querySelector<HTMLButtonElement>(`[data-action="${focused}"]`) ?? dialog.querySelector<HTMLButtonElement>('[data-action="back-menu"]'))?.focus();
+});
 
 function cancelHint() {
   worker?.terminate(); worker = null;
@@ -129,7 +136,15 @@ function drawScreen() {
   const isLastLevel = index === levels.length - 1;
   const close = `<button data-action="close" class="dialog-close" aria-label="Закрыть">${icon('close')}</button>`;
   let html = '';
-  if (screen === 'menu') html = `${close}<span class="eyebrow">МОЖНО НЕМНОГО ОТДОХНУТЬ</span><h2 id="dialog-title">Тихий час</h2><p class="dialog-description">Пруд никуда не спешит.<br>Продолжим, когда будешь готов.</p>${dialogButton('continue', 'Продолжить', true)}${dialogButton('levels', 'Уровни')}<button data-action="sound" class="sound-switch" role="switch" aria-checked="${progress.sound}">${icon('sound')}<span>Звук</span><span class="toggle ${progress.sound ? 'on' : ''}"><i></i></span><small>${progress.sound ? 'Включён' : 'Выключен'}</small></button><p class="keyboard-note">Два нажатия — один прыжок<br>Tab · Enter / Пробел · U — отмена · Esc — меню</p>`;
+  if (screen === 'menu') html = `${close}<span class="eyebrow">МОЖНО НЕМНОГО ОТДОХНУТЬ</span><h2 id="dialog-title">Тихий час</h2><p class="dialog-description">Пруд никуда не спешит.<br>Продолжим, когда будешь готов.</p>${dialogButton('continue', 'Продолжить', true)}${dialogButton('levels', 'Уровни')}${dialogButton('install', pwa.installed ? 'Игра без интернета' : 'Установить игру')}<button data-action="sound" class="sound-switch" role="switch" aria-checked="${progress.sound}">${icon('sound')}<span>Звук</span><span class="toggle ${progress.sound ? 'on' : ''}"><i></i></span><small>${progress.sound ? 'Включён' : 'Выключен'}</small></button><p class="keyboard-note">Два нажатия — один прыжок<br>Tab · Enter / Пробел · U — отмена · Esc — меню</p>`;
+  if (screen === 'install') {
+    const offlineText = {
+      preparing: 'Сохраняем игру для прогулок без интернета…',
+      ready: 'Всё готово: все 20 уровней и подсказки доступны без интернета.',
+      unavailable: 'Офлайн-режим пока недоступен. Попробуй открыть игру ещё раз с интернетом или выбери другой браузер.',
+    }[pwa.offline];
+    html = `${close}<span class="eyebrow">ПРУД ВСЕГДА РЯДОМ</span><h2 id="dialog-title">${pwa.installed ? 'Игра с собой' : 'Установить игру'}</h2><p class="dialog-description">${pwa.installed ? 'Плюх! уже установлен на устройстве.' : 'Добавь Плюх! на устройство, чтобы открывать игру одним нажатием.'}</p>${pwa.canInstall ? dialogButton('install-app', 'Установить', true) : !pwa.installed ? `<p class="install-help">${installationHelp()}</p>` : ''}${pwa.installFailed ? '<p class="install-help">Не удалось открыть установку. Попробуй через меню браузера.</p>' : ''}<p class="offline-status" role="status" data-testid="offline-status">${offlineText}</p><p class="install-note">Новая версия появится после закрытия всех окон игры и следующего запуска. Пройденные уровни и рекорды сохранятся.</p>${dialogButton('back-menu', 'Назад')}`;
+  }
   if (screen === 'levels') html = `${close}<span class="eyebrow">МАЛЕНЬКАЯ ДОРОГА ДОМОЙ</span><h2 id="dialog-title">Тихие пруды</h2><p class="dialog-description">Пройдено ${levels.filter(l => progress.best[l.id] !== undefined).length} из ${levels.length}. Каждый — новое приключение.</p><div class="level-list">${levels.map((l, i) => {
     const unlocked = isUnlocked(levels, progress, i), best = progress.best[l.id];
     return `<button class="level-option ${l.id === session.level.id ? 'active' : ''}" data-action="level" data-level="${i}" ${unlocked ? '' : 'disabled'}><span class="level-badge">${String(i + 1).padStart(2, '0')}</span><span><strong>${l.title}</strong><small>${best !== undefined ? `Лучший результат: ${best} ходов` : unlocked ? 'Дорога ждёт' : `Пройди уровень ${i}`}</small></span>${icon(!unlocked ? 'lock' : best !== undefined ? 'check' : 'arrow')}</button>`;
@@ -214,6 +229,9 @@ app.addEventListener('click', event => {
   if (action !== 'hint') audio.play('ui', progress.sound);
   switch (action) {
     case 'menu': openScreen('menu'); break;
+    case 'install': openScreen('install'); break;
+    case 'install-app': void pwa.install(); break;
+    case 'back-menu': openScreen('menu'); break;
     case 'close': case 'continue': closeScreen(); if (session.state.status === 'won') openScreen('win'); break;
     case 'levels': openScreen('levels'); break;
     case 'undo': case 'win-undo': undo(); break;

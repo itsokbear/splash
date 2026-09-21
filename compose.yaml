@@ -33,8 +33,10 @@ services:
       target: browser-tests
     init: true
     shm_size: "1gb"
+    # Loopback is a secure context, so Chromium exercises real service workers.
+    network_mode: "service:game"
     environment:
-      PLUKH_URL: http://game/play/plukh/
+      PLUKH_URL: http://127.0.0.1/play/plukh/
       CI: "1"
     depends_on:
       game:
