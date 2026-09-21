@@ -1,0 +1,16 @@
+node_modules/
+dist/
+test-results/
+playwright-report/
+artifacts/
+**/__pycache__/
+*.py[cod]
+.DS_Store
+.env
+.env.*
+!.env.example
+coverage/
+dist-export/
+*.log
+plukh_codex/verified_solutions.json
+plukh_codex/verification_report.txt

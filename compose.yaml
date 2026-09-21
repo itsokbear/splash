@@ -1,0 +1,50 @@
+name: plukh
+
+services:
+  game:
+    image: local/${COMPOSE_PROJECT_NAME:-plukh}:latest
+    build:
+      context: .
+      target: runtime
+    ports:
+      - "0.0.0.0:${PLUKH_PORT:-4173}:80"
+    restart: unless-stopped
+
+  checks:
+    profiles: ["checks"]
+    image: local/${COMPOSE_PROJECT_NAME:-plukh}:checks
+    build:
+      context: .
+      target: source
+    command: ["sh", "-c", "npm run typecheck && npm test && npm run build"]
+
+  reference:
+    profiles: ["checks"]
+    image: local/${COMPOSE_PROJECT_NAME:-plukh}:reference
+    build:
+      context: .
+      target: reference-tests
+
+  e2e:
+    profiles: ["checks"]
+    image: local/${COMPOSE_PROJECT_NAME:-plukh}:e2e
+    build:
+      context: .
+      target: browser-tests
+    init: true
+    shm_size: "1gb"
+    environment:
+      PLUKH_URL: http://game/play/plukh/
+      CI: "1"
+    depends_on:
+      game:
+        condition: service_healthy
+
+  dev:
+    profiles: ["dev"]
+    image: local/${COMPOSE_PROJECT_NAME:-plukh}:checks
+    build:
+      context: .
+      target: source
+    ports:
+      - "127.0.0.1:${PLUKH_DEV_PORT:-5173}:5173"
